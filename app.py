@@ -284,6 +284,13 @@ def login():
     logging.info(f'Login attempt for user: {username}')
     
     user = User.query.filter_by(username=username).first()
+    if user.is_deleted:
+        return jsonify({
+            "status": "error",
+            "message": "User is Deleted",
+            "data": None
+        }), 403
+
     if user and user.check_password_hash(password):
         log_activity(
             user_id=user.id,
@@ -312,6 +319,64 @@ def login():
     #     "message": "Invalid username or password.",
     #     "data": None
     # }), 401
+
+
+@app.route('/change_password', methods=['POST'])
+@login_required
+def change_password():
+    current_password = request.form.get('current_password')
+    new_password = request.form.get('new_password')
+    
+    if not current_password or not new_password:
+        return jsonify({
+            "status": "error",
+            "message": "Current password and new password are required.",
+            "data": None
+        }), 400
+    
+    is_valid, error_message = validate_input(current_user.username, new_password)
+    if not is_valid:
+        return jsonify({
+            "status": "error",
+            "message": error_message,
+            "data": None
+        }), 400
+
+    if not current_user.check_password_hash(current_password):
+        return jsonify({
+            "status": "error",
+            "message": "Current password is incorrect.",
+            "data": None
+        }), 403
+    
+    current_user.set_password(new_password)
+    
+    try:
+        db.session.commit()
+        
+        log_activity(
+            user_id=current_user.id,
+            activity_type='password-change',
+            data={
+                'user_id': current_user.id,
+                'username': current_user.username
+            }
+        )
+        logging.info(f'Password changed successfully for user {current_user.username}.')
+        
+        return jsonify({
+            "status": "success",
+            "message": "Password changed successfully.",
+            "data": None
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f'Error changing password for user {current_user.username}: {e}')
+        return jsonify({
+            "status": "error",
+            "message": f"Error: {e}",
+            "data": None
+        }), 500
 
 
 @app.route("/logout")
@@ -383,7 +448,7 @@ def display_all():
     return jsonify(users_list)
 
 
-#comments on post
+# show comments on post
 @app.route("/post/<int:post_id>/comments")
 @login_required
 def post_comments(post_id):
@@ -391,9 +456,9 @@ def post_comments(post_id):
     post = Post.query.get(post_id)
 
     if post_id.is_deleted:
-        return jsonify({"error": "Post is deleted"}), 403
+        return jsonify({"message": "Post is deleted"}), 403
     if not post:
-        return jsonify({"error": "Post not found"}), 404
+        return jsonify({"message": "Post not found"}), 404
 
     comments = Comments.query.filter_by(Post_id=post_id).all()
 
