@@ -306,12 +306,12 @@ def login():
             }
         }), 200
     
-    logging.warning(f'Invalid login attempt for user: {username}')
-    return jsonify({
-        "status": "error",
-        "message": "Invalid username or password.",
-        "data": None
-    }), 401
+    # logging.warning(f'Invalid login attempt for user: {username}')
+    # return jsonify({
+    #     "status": "error",
+    #     "message": "Invalid username or password.",
+    #     "data": None
+    # }), 401
 
 
 @app.route("/logout")
