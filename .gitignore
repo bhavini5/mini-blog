@@ -1,8 +1,0 @@
-static
-templates
-app11.py
-Pipfile
-service-account.json
-env
-Pipfile.lock
-__pycache__
