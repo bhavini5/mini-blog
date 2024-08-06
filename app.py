@@ -296,15 +296,15 @@ def login():
         session.permanent = True
         logging.info(f'User {username} logged in successfully.')
         
-        return jsonify({
-            "status": "success",
-            "message": "Logged in successfully.",
-            "data": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email
-            }
-        }), 200
+    return jsonify({
+        "status": "success",
+        "message": "Logged in successfully.",
+        "data": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email
+        }
+    }), 200
     
     # logging.warning(f'Invalid login attempt for user: {username}')
     # return jsonify({
