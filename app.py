@@ -1157,7 +1157,7 @@ def delete_comment(cid):
     }), 403
 
 
-
+local_tz = pytz.timezone('Asia/Kolkata')
 
 #UPDATE
 @app.route("/update_profile", methods=['GET', 'POST'])
