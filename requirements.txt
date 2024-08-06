@@ -10,3 +10,4 @@ moviepy==1.0.3
 google-api-python-client==2.70.0
 google-auth==2.21.0
 Werkzeug>=2.3.7
+waitress
