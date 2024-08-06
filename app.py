@@ -261,7 +261,7 @@ def activity_log():
     return jsonify([activity.to_dict() for activity in activities])
 
 
-@app.route('/login')
+@app.route('/login',methods=['POST'])
 def login():
     username = request.form.get('username')
     password = request.form.get('password')
@@ -455,10 +455,19 @@ def post_comments(post_id):
 
     post = Post.query.get(post_id)
 
-    if post.is_deleted:
-        return jsonify({"message": "Post is deleted"}), 403
-    if not post:
-        return jsonify({"message": "Post not found"}), 404
+    if post:
+        if post.is_deleted:
+            return jsonify({
+                "status": "error",
+                "message": "Post is deleted",
+                "data": None
+            }), 403
+    else:
+        return jsonify({
+            "status": "error",
+            "message": "Post not found",
+            "data": None
+        }), 404
 
     comments = Comments.query.filter_by(Post_id=post_id).all()
 
@@ -467,7 +476,7 @@ def post_comments(post_id):
             "id": comment.id,
             "comment": comment.Comments,
             "date": comment.date.strftime("%Y-%m-%d %H:%M:%S"),
-            "Post_id": comment.Post_id,
+            "post_id": comment.Post_id,
         }
         for comment in comments
     ]
@@ -486,7 +495,7 @@ def post_comments(post_id):
         "data":comments_list,
         "status":"success",
         "message":"Comments for post"
-    })
+    }),200
 
 #all posts
 @app.route("/posts")
@@ -505,7 +514,6 @@ def get_all_posts():
         }
         for post in posts
     ]
-
     logging.info("Accessed all posts")
 
     log_activity(
@@ -964,13 +972,6 @@ def comments(Pid):
 
 
 
-
-
-
-
-
-
-
 #DELETE
 @app.route("/delete_user", methods=['GET', 'POST'])
 @login_required
@@ -1100,70 +1101,60 @@ def delete_post(Pid):
 
 
 
-@app.route("/<int:cid>/delete_comment", methods=['POST'])
+@app.route("/<int:cid>/delete_comment")
 @login_required
 def delete_comment(cid):
-    if request.method == 'POST':
-        comment = Comments.query.filter_by(id=cid, is_deleted=False).first()
-        if not comment:
-            return jsonify({
-                'status': 'error',
-                'message': 'Invalid comment',
-                'data': None
-            }), 404
-        
-        post = Post.query.get(comment.Post_id)
-        if not post or post.is_deleted:
-            return jsonify({
-                'status': 'error',
-                'message': 'Post not found or is deleted',
-                'data': None
-            }), 404
-
-        if post.user.username == current_user.username or comment.commented_by == current_user.username:
-            # Log the deletion activity
-            log_activity(
-                user_id=current_user.id,
-                activity_type='Comment-deletion',
-                data={
-                    'deleted_comment_id': comment.id,
-                    'post_id': post.id,
-                    'deleted_comment_content': comment.Comments
-                },
-                target_id=comment.id,
-                target_type='Comment'
-            )
-            
-            comment.is_deleted = True
-            try:
-                db.session.commit()
-                logging.info(f'Comment with ID {comment.id} deleted successfully by user {current_user.username}.')
-                return jsonify({
-                    'status': 'success',
-                    'message': 'Deleted comment',
-                    'data': None
-                }), 200
-            except Exception as e:
-                db.session.rollback()
-                logging.error(f'Error deleting comment with ID {comment.id}: {e}')
-                return jsonify({
-                    'status': 'error',
-                    'message': f'Error: {e}',
-                    'data': None
-                }), 500
-
+    comment = Comments.query.filter_by(id=cid, is_deleted=False).first()
+    if not comment:
         return jsonify({
             'status': 'error',
-            'message': 'You are not allowed to delete the comment',
+            'message': 'Invalid comment',
             'data': None
-        }), 403
-
+        }), 404
+    
+    post = Post.query.get(comment.Post_id)
+    if not post or post.is_deleted:
+        return jsonify({
+            'status': 'error',
+            'message': 'Post not found or is deleted',
+            'data': None
+        }), 404
+    if post.user.username == current_user.username or comment.commented_by == current_user.username:
+        # Log the deletion activity
+        log_activity(
+            user_id=current_user.id,
+            activity_type='Comment-deletion',
+            data={
+                'deleted_comment_id': comment.id,
+                'post_id': post.id,
+                'deleted_comment_content': comment.Comments
+            },
+            target_id=comment.id,
+            target_type='Comment'
+        )
+        
+        comment.is_deleted = True
+        try:
+            db.session.commit()
+            logging.info(f'Comment with ID {comment.id} deleted successfully by user {current_user.username}.')
+            return jsonify({
+                'status': 'success',
+                'message': 'Deleted comment',
+                'data': None
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f'Error deleting comment with ID {comment.id}: {e}')
+            return jsonify({
+                'status': 'error',
+                'message': f'Error: {e}',
+                'data': None
+            }), 500
     return jsonify({
         'status': 'error',
-        'message': 'Invalid request method',
+        'message': 'You are not allowed to delete the comment',
         'data': None
-    }), 405
-
+    }), 403
 
 
 
@@ -1189,8 +1180,8 @@ def update_profile():
         }), 403
 
     if request.method == 'POST':
-        user_id = request.form.get('user_id', type=int)
-        if user_id != user.id:
+        username = request.form.get('username', type=int)
+        if username != user.username:
             return jsonify({
                 "status": "error",
                 "message": "You are not authorized to update this profile",
