@@ -831,13 +831,14 @@ def comments(Pid):
 
     if request.method == 'POST':
         comment = request.form.get('Comments')
-
-        if current_user.id == post.user.id:
-            return jsonify({
-                'status': 'error',
-                'message': 'You cannot comment on your own post',
-                'data': None
-            }), 403
+        # print(post.user.id)
+        # print(current_user.id)
+        # if current_user.id == post.user.id:
+        #     return jsonify({
+        #         'status': 'error',
+        #         'message': 'You cannot comment on your own post',
+        #         'data': None
+        #     }), 403
         
         if len(comment) < 5:
             return jsonify({
