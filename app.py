@@ -812,7 +812,8 @@ def add_post():
 @app.route("/<int:Pid>/comments", methods=['GET', 'POST'])
 @login_required
 def comments(Pid):
-    post = Post.query.get(Pid)
+    if request.method == 'POST':
+        post = Post.query.get(Pid)
 
     if not post:
         return jsonify({
@@ -1111,7 +1112,6 @@ def update_profile():
         }), 403
 
     if request.method == 'POST':
-        # Check if the request is updating the current user's profile
         user_id = request.form.get('user_id', type=int)
         if user_id != user.id:
             return jsonify({
