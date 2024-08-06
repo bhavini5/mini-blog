@@ -1,7 +1,7 @@
 Flask==2.3.3
 Flask-SQLAlchemy==3.0.0
 Flask-Migrate==4.0.4
-Flask-Login==0.6.2
+Flask-Login==0.6.3
 Flask-WTF==1.1.1
 python-dotenv==1.0.0
 pytz==2024.1
@@ -9,4 +9,4 @@ bcrypt==4.0.1
 moviepy==1.0.3
 google-api-python-client==2.70.0
 google-auth==2.21.0
-werkzeug>=2.3.7
+Werkzeug>=2.3.7
