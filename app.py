@@ -455,7 +455,7 @@ def post_comments(post_id):
 
     post = Post.query.get(post_id)
 
-    if post_id.is_deleted:
+    if post.is_deleted:
         return jsonify({"message": "Post is deleted"}), 403
     if not post:
         return jsonify({"message": "Post not found"}), 404
@@ -482,7 +482,11 @@ def post_comments(post_id):
         data={"comment_count": len(comments_list)}
     )
 
-    return jsonify(comments_list)
+    return jsonify({
+        "data":comments_list,
+        "status":"success",
+        "message":"Comments for post"
+    })
 
 #all posts
 @app.route("/posts")
