@@ -1041,10 +1041,9 @@ def delete_user():
 
 
 
-@app.route("/<int:Pid>/delete_post", methods=['POST'])
+@app.route("/<int:Pid>/delete_post")
 @login_required
 def delete_post(Pid):
-    if request.method == 'POST':
         post = Post.query.filter_by(id=Pid).first()
         if not post:
             return jsonify({
@@ -1091,12 +1090,6 @@ def delete_post(Pid):
             'message': 'You are not allowed to delete this post',
             'data': None
         }), 403
-
-    return jsonify({
-        'status': 'error',
-        'message': 'Invalid request method',
-        'data': None
-    }), 405
 
 
 
