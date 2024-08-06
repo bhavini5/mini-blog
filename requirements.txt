@@ -13,3 +13,4 @@ Werkzeug==3.0.3
 waitress==3.0.0
 psycopg2-binary==2.9.9
 SQLAlchemy==1.4.47
+flask_cors
