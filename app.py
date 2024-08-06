@@ -19,6 +19,7 @@ from google.oauth2 import service_account
 from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
 from dotenv import load_dotenv
+from flask_cors import CORS
 
 load_dotenv()
 
@@ -30,6 +31,7 @@ video_drive = os.getenv('VIDEO_DRIVE')
 print(os.getenv('SQLALCHEMY_DATABASE_URL'))
 
 app = Flask(__name__)
+CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
