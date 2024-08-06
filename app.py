@@ -23,22 +23,20 @@ from flask_cors import CORS
 
 load_dotenv()
 
-# Environment variables
 parent_folder_id = os.getenv('PARENT_FOLDER_ID')
 profile_drive = os.getenv('PROFILE_DRIVE')
 images_drive = os.getenv('IMAGES_DRIVE')
 video_drive = os.getenv('VIDEO_DRIVE')
-print(os.getenv('SQLALCHEMY_DATABASE_URL'))
-
+# print("Database URL:", os.getenv('SQLALCHEMY_DATABASE_URL'))
+# print(os.getenv('SECRET_KEY') )
 app = Flask(__name__)
 CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.secret_key = '$&XDCB!#b'
+app.secret_key = os.getenv('SECRET_KEY') 
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
 
-# Initialize extensions
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
@@ -263,63 +261,95 @@ def activity_log():
     return jsonify([activity.to_dict() for activity in activities])
 
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login')
 def login():
-    if request.method == 'POST':
-        username = request.form.get('Username')
-        password = request.form.get('Password')
-        
-        is_valid, error_message = validate_input(username, password)
-        if not is_valid:
-            return error_message, 400
-        
-        logging.info(f'Login attempt for user: {username}')
-        
-        user = User.query.filter_by(username=username).first()
-        log_activity(
-        user_id=user.id,
-        activity_type='login',
-        data= user.username
-        )
-        if user and user.check_password_hash(password):
-            session['user_id'] = user.id
-            login_user(user)
-            next_page = request.args.get('next')
-            session.permanent = True
-            logging.info(f'User {username} logged in successfully.')
-            return redirect(next_page or url_for('index'))
-        
-        logging.warning(f'Invalid login attempt for user: {username}')
-        return "Invalid username or password!"
+    username = request.form.get('username')
+    password = request.form.get('password')
     
-    logging.info('User visited the login page.')
-    return 'Please log in to access this page'
+    if username is None or password is None:
+        return jsonify({
+            "status": "error",
+            "message": "Username or password cannot be None.",
+            "data": None
+        }), 400
+    
+    is_valid, error_message = validate_input(username, password)
+    if not is_valid:
+        return jsonify({
+            "status": "error",
+            "message": error_message,
+            "data": None
+        }), 400
+    
+    logging.info(f'Login attempt for user: {username}')
+    
+    user = User.query.filter_by(username=username).first()
+    if user and user.check_password_hash(password):
+        log_activity(
+            user_id=user.id,
+            activity_type='login',
+            data=user.username
+        )
+        session['user_id'] = user.id
+        login_user(user)
+        next_page = request.args.get('next')
+        session.permanent = True
+        logging.info(f'User {username} logged in successfully.')
+        
+        return jsonify({
+            "status": "success",
+            "message": "Logged in successfully.",
+            "data": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email
+            }
+        }), 200
+    
+    logging.warning(f'Invalid login attempt for user: {username}')
+    return jsonify({
+        "status": "error",
+        "message": "Invalid username or password.",
+        "data": None
+    }), 401
 
 
 @app.route("/logout")
 @login_required
 def logout():
-    user_info = {
-        'username': current_user.username,
-        'email': current_user.email,
-        'first_name': current_user.first_name,
-        'last_name': current_user.last_name,
-        'user_id': current_user.id
-    }
-    username = current_user.username
-    log_activity(
-        user_id=current_user.id,
-        activity_type='logout',
-        data={
-            'user_info': user_info
+    try:
+        user_info = {
+            'username': getattr(current_user, 'username', 'Unknown'),
+            'email': getattr(current_user, 'email', 'Unknown'),
+            'first_name': getattr(current_user, 'first_name', 'Unknown'),
+            'last_name': getattr(current_user, 'last_name', 'Unknown'),
+            'user_id': getattr(current_user, 'id', 'Unknown')
         }
-    )
-    logout_user()
-    session.clear() 
-    resp = redirect(url_for('login'))
-    resp.set_cookie('session', '', expires=0)
-    logging.info(f'{username} has been logged out successfully.')
-    return resp
+        
+        log_activity(
+            user_id=user_info['user_id'],
+            activity_type='logout',
+            data={'user_info': user_info}
+        )
+
+        logout_user()
+        session.clear() 
+
+        logging.info(f"{user_info['username']} has been logged out successfully.")
+        
+        return jsonify({
+            "status": "success",
+            "message": "Logged out successfully.",
+            "data": user_info
+        }), 200
+
+    except Exception as e:
+        logging.error(f"Error during logout: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": "An error occurred during logout.",
+            "data": None
+        }), 500
 
 
 # all user
@@ -416,21 +446,34 @@ def get_all_posts():
         data={"post_count": len(posts_list)}
     )
 
-    return jsonify(posts_list)
+    return jsonify({
+        "status": "success",
+        "message": "Posts retrieved successfully.",
+        "data": posts_list
+    }), 200
+
 
 
 # specific user post
 @app.route("/user/<int:user_id>/posts")
 @login_required
 def get_user_posts(user_id):
-
     user = User.query.get(user_id)
 
     if not user:
-        return jsonify({"error": "User not found"}), 404
+        return jsonify({
+            "status": "error",
+            "message": "User not found",
+            "data": None
+        }), 404
+
     if user.is_deleted:
-        return jsonify({"error": "Account is deleted"}), 403
-        
+        return jsonify({
+            "status": "error",
+            "message": "Account is deleted",
+            "data": None
+        }), 403
+
     posts = Post.query.filter_by(user_id=user_id, is_deleted=False).all()
 
     posts_list = [
@@ -447,14 +490,18 @@ def get_user_posts(user_id):
     logging.info(f"Accessed posts for user {user_id}")
 
     log_activity(
-        user_id=1,
+        user_id=current_user.id,
         activity_type="view_user_posts",
         target_id=user.id,
         target_type="User",
         data={"post_count": len(posts_list)}
     )
 
-    return jsonify(posts_list)
+    return jsonify({
+        "status": "success",
+        "message": "Posts retrieved successfully.",
+        "data": posts_list
+    }), 200
 
 
 
@@ -494,27 +541,46 @@ def create_user():
 
     required_fields = ['first_name', 'last_name', 'username', 'password', 'email']
     if not all(key in request.form for key in required_fields):
-        return "Error: Missing required data (first name, last name, username, password, email)", 400
+        return jsonify({
+            'status': 'error',
+            'message': 'Missing required data (first name, last name, username, password, email)',
+            'data': None
+        }), 400
 
     email = request.form.get('email')
     if not email or not is_valid_email(email):
-        return "Error: Valid email is required", 400
+        return jsonify({
+            'status': 'error',
+            'message': 'Valid email is required',
+            'data': None
+        }), 400
 
     username = request.form.get('username')
     if User.query.filter_by(email=email).first():
-        return "Error: Email already exists", 400
+        return jsonify({
+            'status': 'error',
+            'message': 'Email already exists',
+            'data': None
+        }), 400
 
     if User.query.filter_by(username=username).first():
-        return "Error: Username already exists", 400
+        return jsonify({
+            'status': 'error',
+            'message': 'Username already exists',
+            'data': None
+        }), 400
 
     password = request.form.get('password')
     is_valid, error_message = validate_input(username, password)
     if not is_valid:
-        return error_message, 400
+        return jsonify({
+            'status': 'error',
+            'message': error_message,
+            'data': None
+        }), 400
 
     phone_number = request.form.get('phone_number')
 
-    # Create a temporary user to get the ID
     temp_user = User(
         first_name=request.form.get('first_name'),
         last_name=request.form.get('last_name'),
@@ -546,7 +612,11 @@ def create_user():
         db.session.commit()  
     except Exception as e:
         db.session.rollback()
-        return f"Error: {e}", 500
+        return jsonify({
+            'status': 'error',
+            'message': f'Error: {str(e)}',
+            'data': None
+        }), 500
 
     user_info = {
         'first_name': temp_user.first_name,
@@ -573,10 +643,12 @@ def create_user():
         'phone_number': phone_number,
         'profile_image': temp_user.profile_image
     }
+
     return jsonify({
-        'message': "User created successfully",
+        'status': 'success',
+        'message': 'User created successfully',
         'data': response_data
-    }), 201
+    }), 200
 
 
 
@@ -590,25 +662,41 @@ def create_user():
 #    return render_template('post.html', posts=posts)
 
 
-
-
-from werkzeug.urls import urlencode
+from werkzeug.utils import secure_filename
 from moviepy.editor import VideoFileClip
 
 @app.route("/add_post", methods=['POST'])
 @login_required
-def add_pos2t():
+def add_post():
     if not current_user:
-        return jsonify({"error": "User not found"}), 404
+        return jsonify({
+            'status': 'error',
+            'message': 'User not found',
+            'data': None
+        }), 404
 
     if current_user.is_deleted:
-        return jsonify({"error": "Account is deleted"}), 403
+        return jsonify({
+            'status': 'error',
+            'message': 'Account is deleted',
+            'data': None
+        }), 403
 
     content = request.form.get('content', '')
     content_length = len(content)
     if content_length > 1000:
-        return jsonify({"error": "Content is too long"}), 400
-
+        return jsonify({
+            'status': 'error',
+            'message': 'Content is too long',
+            'data': None
+        }), 400
+    files = request.files.getlist('post')
+    if not content and not files:
+        return jsonify({
+            'status': 'error',
+            'message': 'Content and Media are both empty',
+            'data': None
+        }), 400
     files = request.files.getlist('post')
     images = []
     videos = []
@@ -640,28 +728,36 @@ def add_pos2t():
                 'file_name': filename
             })
             os.remove(file_path)
-        elif file_extension in {'mp4', 'avi', 'mov'}:
-            local_folder = os.path.join('Mini-Blog/Post-videos', str(post_id))
-            file_path = save_file(file, local_folder, filename)
+        # elif file_extension in {'mp4', 'avi', 'mov'}:
+        #     local_folder = os.path.join('Mini-Blog/Post-videos', str(post_id))
+        #     file_path = save_file(file, local_folder, filename)
 
             # Check the video duration
-            with VideoFileClip(file_path) as video:
-                video_duration = video.duration
-                if video_duration > max_video_duration:
-                    db.session.rollback()
-                    return jsonify({"error": "Video is too long"}), 400
+            # with VideoFileClip(file_path) as video:
+            #     video_duration = video.duration
+            #     if video_duration > max_video_duration:
+            #         db.session.rollback()
+            #         return jsonify({
+            #             'status': 'error',
+            #             'message': 'Video is too long',
+            #             'data': None
+            #         }), 400
 
-            drive_folder = video_drive
-            drive_file_id = upload_to_drive(file_path, drive_folder, drive_file_name)
-            videos.append({
-                'drive_file_id': drive_file_id,
-                'file_name': filename,
-                'duration': video_duration
-            })
-            os.remove(file_path)
+            # drive_folder = video_drive
+            # drive_file_id = upload_to_drive(file_path, drive_folder, drive_file_name)
+            # videos.append({
+            #     'drive_file_id': drive_file_id,
+            #     'file_name': filename,
+            #     'duration': video_duration
+            # })
+            # os.remove(file_path)
         else:
             db.session.rollback()
-            return jsonify({"error": "Unsupported file type"}), 400
+            return jsonify({
+                'status': 'error',
+                'message': 'Unsupported file type',
+                'data': None
+            }), 400
 
     new_post.images = [img['file_name'] for img in images]
     new_post.videos = [vid['file_name'] for vid in videos]
@@ -684,18 +780,31 @@ def add_pos2t():
         logging.info(f'Post with id {new_post.id} has been successfully created.')
 
         return jsonify({
-            "images": images,
-            "content": content,
-            "content_length": content_length,
-            "videos": videos
+            'status': 'success',
+            'message': 'Post created successfully',
+            'data': {
+                'images': images,
+                'content': content,
+                'content_length': content_length,
+                'videos': videos
+            }
         }), 201
 
     except Exception as e:
         db.session.rollback()
         logging.error(f'Error creating post: {e}')
-        return jsonify({"error": f"Error: {e}"}), 500
+        return jsonify({
+            'status': 'error',
+            'message': f'Error: {str(e)}',
+            'data': None
+        }), 500
 
-    return jsonify({"error": "Invalid request method"}), 405
+    return jsonify({
+        'status': 'error',
+        'message': 'Invalid request method',
+        'data': None
+    }), 405
+
 
 
 
@@ -706,20 +815,43 @@ def comments(Pid):
     post = Post.query.get(Pid)
 
     if not post:
-        return jsonify({"error": "Invalid post ID"}), 404
-    
-    if post.is_deleted:
-        return jsonify({"error": "Post is deleted"}), 403
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid post ID',
+            'data': None
+        }), 404
 
-    if request.method == 'POST' :
+    if post.is_deleted:
+        return jsonify({
+            'status': 'error',
+            'message': 'Post is deleted',
+            'data': None
+        }), 403
+
+    if request.method == 'POST':
         comment = request.form.get('Comments')
+
         if current_user.id == post.user.id:
-            return "Error: You cannot comment on your own post", 403
-        if len(comment) < 5:
-            return "Error: Comment is too short. It must be at least 5 characters long.", 400
-        if len(comment) > 500:
-            return "Error: Comment is too long. It must be no more than 500 characters.", 400
+            return jsonify({
+                'status': 'error',
+                'message': 'You cannot comment on your own post',
+                'data': None
+            }), 403
         
+        if len(comment) < 5:
+            return jsonify({
+                'status': 'error',
+                'message': 'Comment is too short. It must be at least 5 characters long.',
+                'data': None
+            }), 400
+
+        if len(comment) > 500:
+            return jsonify({
+                'status': 'error',
+                'message': 'Comment is too long. It must be no more than 500 characters.',
+                'data': None
+            }), 400
+
         new_comment = Comments(
             Comments=comment,
             User_id=current_user.id,
@@ -741,19 +873,23 @@ def comments(Pid):
         )
 
         logging.info(f'User {current_user.username} commented on post with ID {post.id}')
-        
+
         response_data = {
             "comment": comment,
             "commented_by": current_user.username,
-            "Post Id": post.id
+            "post_id": post.id
         }
         return jsonify({
-            "MESSAGE": "Comment added successfully",
-            "Data": response_data
+            'status': 'success',
+            'message': 'Comment added successfully',
+            'data': response_data
         }), 201
 
-    return "Error: Invalid request method", 405
-
+    return jsonify({
+        'status': 'error',
+        'message': 'Invalid request method',
+        'data': None
+    }), 405
 
 
 
@@ -763,13 +899,21 @@ def comments(Pid):
 def delete_user():
     if request.method == 'POST':
         if not current_user.is_authenticated:
-            return "Error: You must be logged in to access this page", 401
+            return jsonify({
+                'status': 'error',
+                'message': 'You must be logged in to access this page',
+                'data': None
+            }), 401
         
         user = current_user
         password = request.form.get('password', '')
         
         if not check_password_hash(user.password, password):
-            return "Error: Incorrect password", 403
+            return jsonify({
+                'status': 'error',
+                'message': 'Incorrect password',
+                'data': None
+            }), 403
         
         user.is_deleted = True
         
@@ -794,12 +938,25 @@ def delete_user():
             )
             logging.info(f'User {user.username} has been soft deleted and logged out successfully.')
             logout_user()
-            return "User deleted successfully", 200
+            return jsonify({
+                'status': 'success',
+                'message': 'User deleted successfully',
+                'data': None
+            }), 200
         except Exception as e:
             db.session.rollback()
-            return f"Error: {e}", 500
+            logging.error(f'Error deleting user: {e}')
+            return jsonify({
+                'status': 'error',
+                'message': f'Error: {e}',
+                'data': None
+            }), 500
 
-    return "Error: Invalid request method", 405
+    return jsonify({
+        'status': 'error',
+        'message': 'Invalid request method',
+        'data': None
+    }), 405
 
 
 
@@ -811,7 +968,11 @@ def delete_post(Pid):
     if request.method == 'POST':
         post = Post.query.filter_by(id=Pid).first()
         if not post:
-            return jsonify({"error": "Invalid Post"}), 404
+            return jsonify({
+                'status': 'error',
+                'message': 'Invalid Post',
+                'data': None
+            }), 404
 
         if post.user.username == current_user.username:
             post.is_deleted = True
@@ -832,15 +993,32 @@ def delete_post(Pid):
                 )
                 
                 logging.info(f'Post with ID {post.id} and associated comments have been soft deleted by user {current_user.username}.')
-                return jsonify({"message": "Post and associated comments deleted successfully!"}), 200
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Post and associated comments deleted successfully!',
+                    'data': None
+                }), 200
             except Exception as e:
                 db.session.rollback()
                 logging.error(f'Error deleting post with ID {post.id}: {e}')
-                return jsonify({"error": f"Error: {e}"}), 500
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Error: {e}',
+                    'data': None
+                }), 500
 
-        return jsonify({"error": "You are not allowed to delete this post"}), 403
+        return jsonify({
+            'status': 'error',
+            'message': 'You are not allowed to delete this post',
+            'data': None
+        }), 403
 
-    return jsonify({"error": "Invalid request method"}), 405
+    return jsonify({
+        'status': 'error',
+        'message': 'Invalid request method',
+        'data': None
+    }), 405
+
 
 
 
@@ -850,11 +1028,19 @@ def delete_comment(cid):
     if request.method == 'POST':
         comment = Comments.query.filter_by(id=cid, is_deleted=False).first()
         if not comment:
-            return jsonify({"error": "Invalid comment"}), 404
+            return jsonify({
+                'status': 'error',
+                'message': 'Invalid comment',
+                'data': None
+            }), 404
         
         post = Post.query.get(comment.Post_id)
         if not post or post.is_deleted:
-            return jsonify({"error": "Post not found or is deleted"}), 404
+            return jsonify({
+                'status': 'error',
+                'message': 'Post not found or is deleted',
+                'data': None
+            }), 404
 
         if post.user.username == current_user.username or comment.commented_by == current_user.username:
             # Log the deletion activity
@@ -874,14 +1060,32 @@ def delete_comment(cid):
             try:
                 db.session.commit()
                 logging.info(f'Comment with ID {comment.id} deleted successfully by user {current_user.username}.')
-                return jsonify({"message": "Deleted comment"}), 200
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Deleted comment',
+                    'data': None
+                }), 200
             except Exception as e:
                 db.session.rollback()
                 logging.error(f'Error deleting comment with ID {comment.id}: {e}')
-                return jsonify({"error": f"Error: {e}"}), 500
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Error: {e}',
+                    'data': None
+                }), 500
 
-        return jsonify({"error": "You are not allowed to delete the comment"}), 403
-    return jsonify({"error": "Invalid request method"}), 405
+        return jsonify({
+            'status': 'error',
+            'message': 'You are not allowed to delete the comment',
+            'data': None
+        }), 403
+
+    return jsonify({
+        'status': 'error',
+        'message': 'Invalid request method',
+        'data': None
+    }), 405
+
 
 
 
@@ -891,30 +1095,59 @@ def delete_comment(cid):
 @login_required
 def update_profile():
     user = current_user
-    if user.is_deleted:
-        return jsonify({"error": "Account is deleted"}), 403
 
-    if request.method == 'POST' :
+    if not user.is_authenticated:
+        return jsonify({
+            "status": "error",
+            "message": "User must be logged in to update profile",
+            "data": None
+        }), 401
+    
+    if user.is_deleted:
+        return jsonify({
+            "status": "error",
+            "message": "Account is deleted",
+            "data": None
+        }), 403
+
+    if request.method == 'POST':
+        # Check if the request is updating the current user's profile
+        user_id = request.form.get('user_id', type=int)
+        if user_id != user.id:
+            return jsonify({
+                "status": "error",
+                "message": "You are not authorized to update this profile",
+                "data": None
+            }), 403
+
         first_name = request.form.get('first_name', '')
         last_name = request.form.get('last_name', '')
         email = request.form.get('email', '')
         phone_number = request.form.get('phone_number', '')
-        remove_image = 'remove_image' in request.form  
+        # remove_image = 'remove_image' in request.form  
 
         if not email and not phone_number:
-            return jsonify({"error": "At least one contact method (email or phone number) is required"}), 400
+            return jsonify({
+                "status": "error",
+                "message": "At least one contact method (email or phone number) is required",
+                "data": None
+            }), 400
 
         existing_user = User.query.filter_by(email=email).first()
         if existing_user and existing_user.id != user.id:
-            return jsonify({"error": "Email already exists"}), 400
+            return jsonify({
+                "status": "error",
+                "message": "Email already exists",
+                "data": None
+            }), 400
 
         file = request.files.get('profile_pic')
 
-        if remove_image and user.profile_image:
-            delete_files_by_name(user.profile_image)
-            user.profile_image = None
+        # if remove_image and user.profile_image:
+        #     delete_files_by_name(user.profile_image)
+        #     user.profile_image = None
 
-        elif file and allowed_file(file.filename):
+        if file and allowed_file(file.filename):
             if user.profile_image:
                 delete_files_by_name(user.profile_image)
             
@@ -925,7 +1158,7 @@ def update_profile():
 
             file.save(local_file_path)
 
-            drive_folder_id = '1nsVFEI8in3wJZE0yUIfB5P-JMQCBctT-'
+            drive_folder_id = profile_drive
             drive_file_name = f'{user.id}/{filename}'
             new_drive_file_id = upload_to_drive(local_file_path, drive_folder_id, drive_file_name)
             os.remove(local_file_path)
@@ -936,7 +1169,7 @@ def update_profile():
         user.last_name = last_name
         user.email = email
         user.phone_number = phone_number
-        user.is_updated_at=datetime.now(local_tz)
+        user.is_updated_at = datetime.now(local_tz)
 
         try:
             db.session.commit()
@@ -958,37 +1191,77 @@ def update_profile():
             )
 
             logging.info(f'User profile updated successfully for user {user.username}.')
-            return jsonify({"message": "Updated Successfully"}), 200
+            user_data = {
+                'id': user.id,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'username': user.username,
+                'email': user.email,
+                'phone_number': user.phone_number,
+                'profile_image': user.profile_image,
+                'date_of_join': user.date_of_join,
+                'is_updated_at': user.is_updated_at
+            }
+            return jsonify({
+                "status": "success",
+                "message": "Updated Successfully",
+                "data": user_data
+            }), 200
         except Exception as e:
             db.session.rollback()
             logging.error(f'Error updating profile for user {user.username}: {e}')
-            return jsonify({"error": f"Error: {e}"}), 500
+            return jsonify({
+                "status": "error",
+                "message": f"Error: {e}",
+                "data": None
+            }), 500
 
-    return jsonify({"error": "Invalid request method"}), 405
+    return jsonify({
+        "status": "error",
+        "message": "Invalid request method",
+        "data": None
+    }), 405
 
 
 
-@app.route("/<int:Pid>/update_post", methods=['GET', 'POST'])
+@app.route("/<int:Pid>/update_post", methods=['POST'])
 @login_required
 def update_post(Pid):
     post = Post.query.filter_by(id=Pid).first()
-    if post.is_deleted:
-        return jsonify({"error": "Post is deleted"}), 403
-
+    
     if not post:
-        return jsonify({"error": "Invalid Post"}), 404
+        return jsonify({
+            "status": "error",
+            "message": "Invalid Post",
+            "data": None
+        }), 404
+
+    if post.is_deleted:
+        return jsonify({
+            "status": "error",
+            "message": "Post is deleted",
+            "data": None
+        }), 403
 
     if request.method == 'POST':
-        if current_user.id != post.user.id:
-            return jsonify({"error": "You cannot edit this post"}), 403
+        if current_user.id != post.user_id:
+            return jsonify({
+                "status": "error",
+                "message": "You cannot edit this post",
+                "data": None
+            }), 403
 
-        content = request.form.get('content')
+        content = request.form.get('content', '')
         if content:
             if len(content) > 1000:
-                return jsonify({"error": "Content is too long"}), 400
+                return jsonify({
+                    "status": "error",
+                    "message": "Content is too long. It must be no more than 1000 characters.",
+                    "data": None
+                }), 400
+            post.content = content
 
-        post.content = content
-        post.is_updated_at=datetime.now(local_tz)
+        post.is_updated_at = datetime.now(local_tz)
 
         try:
             db.session.commit()
@@ -1004,12 +1277,29 @@ def update_post(Pid):
                 target_type='Post'
             )
             logging.info(f'Post with ID {post.id} updated successfully by user {current_user.username}.')
-            return jsonify({"message": "Post Updated Successfully"}), 200
+            return jsonify({
+                "status": "success",
+                "message": "Post Updated Successfully",
+                "data": {
+                    "post_id": post.id,
+                    "updated_content": post.content
+                }
+            }), 200
         except Exception as e:
             db.session.rollback()
             logging.error(f'Error updating post with ID {post.id} by user {current_user.username}: {e}')
-            return jsonify({"error": f"Error: {e}"}), 500
-    return jsonify({"error": "Invalid request method"}), 405
+            return jsonify({
+                "status": "error",
+                "message": f"Error: {e}",
+                "data": None
+            }), 500
+
+    return jsonify({
+        "status": "error",
+        "message": "Invalid request method",
+        "data": None
+    }), 405
+
 
 
 
