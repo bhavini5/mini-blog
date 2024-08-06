@@ -27,9 +27,10 @@ parent_folder_id = os.getenv('PARENT_FOLDER_ID')
 profile_drive = os.getenv('PROFILE_DRIVE')
 images_drive = os.getenv('IMAGES_DRIVE')
 video_drive = os.getenv('VIDEO_DRIVE')
+print(os.getenv('SQLALCHEMY_DATABASE_URL'))
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.secret_key = '$&XDCB!#b'
@@ -472,14 +473,14 @@ def show():
 
 
 #DISPLAYING USERS
-@app.route('/uploads/<path:filename>')
-def serve_file(filename):
-    return send_from_directory('uploads', filename)
+# @app.route('/uploads/<path:filename>')
+# def serve_file(filename):
+#     return send_from_directory('uploads', filename)
 
-@app.route('/image', methods=['GET'])
-def upload_file():
-    all_users = User.query.all()  
-    return render_template('image.html', users=all_users)
+# @app.route('/image', methods=['GET'])
+# def upload_file():
+#     all_users = User.query.all()  
+#     return render_template('image.html', users=all_users)
 
 
 #CREATE
@@ -578,20 +579,18 @@ def create_user():
 
 
 #Displaying posts
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-     return send_from_directory('uploads', filename)
-@app.route("/add_post")
-def add():
-   posts = Post.query.all()
-   return render_template('post.html', posts=posts)
+# @app.route('/uploads/<filename>')
+# def uploaded_file(filename):
+#      return send_from_directory('uploads', filename)
+# @app.route("/add_post")
+# def add():
+#    posts = Post.query.all()
+#    return render_template('post.html', posts=posts)
 
 
 
 
 from werkzeug.urls import urlencode
-
-
 from moviepy.editor import VideoFileClip
 
 @app.route("/add_post", methods=['POST'])
@@ -698,110 +697,6 @@ def add_pos2t():
 
 
 
-@app.route("/add_post_user_6", methods=['POST'])
-@login_required
-def add_post():
-    user_id = 6  # Hardcoded user ID
-
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-
-    if user.is_deleted:
-        return jsonify({"error": "Account is deleted"}), 403
-
-    content = request.form.get('content', '')
-    content_length = len(content)
-    if content_length > 1000:
-        return jsonify({"error": "Content is too long"}), 400
-
-    files = request.files.getlist('post')
-    images = []
-    videos = []
-    max_video_duration = 60 
-
-    new_post = Post(
-        content=content,
-        user_id=user.id
-    )
-    db.session.add(new_post)
-    db.session.flush()
-    post_id = new_post.id
-
-    for file in files:
-        if file.filename == '':
-            continue
-
-        file_extension = file.filename.rsplit('.', 1)[1].lower()
-        filename = secure_filename(file.filename)
-        drive_file_name = f'{post_id}/{filename}'
-
-        if file_extension in {'png', 'jpg', 'jpeg', 'gif'}:
-            local_folder = os.path.join('Mini-Blog/Post-images', str(post_id))
-            file_path = save_file(file, local_folder, filename)
-            drive_folder = images_drive
-            drive_file_id = upload_to_drive(file_path, drive_folder, drive_file_name)
-            images.append({
-                'drive_file_id': drive_file_id,
-                'file_name': filename
-            })
-            os.remove(file_path)
-        elif file_extension in {'mp4', 'avi', 'mov'}:
-            local_folder = os.path.join('Mini-Blog/Post-videos', str(post_id))
-            file_path = save_file(file, local_folder, filename)
-
-            # Check the video duration
-            with VideoFileClip(file_path) as video:
-                video_duration = video.duration
-                if video_duration > max_video_duration:
-                    db.session.rollback()
-                    return jsonify({"error": "Video is too long"}), 400
-
-            drive_folder = video_drive
-            drive_file_id = upload_to_drive(file_path, drive_folder, drive_file_name)
-            videos.append({
-                'drive_file_id': drive_file_id,
-                'file_name': filename,
-                'duration': video_duration
-            })
-            os.remove(file_path)
-        else:
-            db.session.rollback()
-            return jsonify({"error": "Unsupported file type"}), 400
-
-    new_post.images = [img['file_name'] for img in images]
-    new_post.videos = [vid['file_name'] for vid in videos]
-
-    try:
-        db.session.commit()
-
-        log_activity(
-            user_id=user.id,
-            activity_type='Post-creation',
-            target_id=new_post.id,
-            target_type="Post",
-            data={
-                'content': content,
-                'images': images,
-                'videos': videos
-            }
-        )
-
-        logging.info(f'Post with id {new_post.id} has been successfully created.')
-
-        return jsonify({
-            "images": images,
-            "content": content,
-            "content_length": content_length,
-            "videos": videos
-        }), 201
-
-    except Exception as e:
-        db.session.rollback()
-        logging.error(f'Error creating post: {e}')
-        return jsonify({"error": f"Error: {e}"}), 500
-
-    return jsonify({"error": "Invalid request method"}), 405
 
 @app.route("/<int:Pid>/comments", methods=['GET', 'POST'])
 @login_required
