@@ -9,4 +9,4 @@ bcrypt==4.0.1
 moviepy==1.0.3
 google-api-python-client==2.70.0
 google-auth==2.21.0
-gunicorn==20.1.0
+werkzeug==2.2.0
