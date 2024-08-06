@@ -488,7 +488,8 @@ def post_comments(post_id):
 @app.route("/posts")
 @login_required
 def get_all_posts():
-    posts = Post.query.filter_by(is_deleted=False).all()
+    posts = Post.query.filter_by(is_deleted=False).order_by(Post.date_of_creation.desc()).all()
+
     posts_list = [
         {
             "id": post.id,
@@ -496,7 +497,7 @@ def get_all_posts():
             "images": post.images,
             "videos": post.videos,
             "user_id": post.user_id,  
-            "date_of_creation": post.date_of_creation.strftime("%Y-%m-%d %H:%M:%S"),
+            "date_of_creation": post.date_of_creation.astimezone(pytz.timezone('Asia/Kolkata')).strftime("%Y-%m-%d %H:%M:%S") if post.date_of_creation else None,
         }
         for post in posts
     ]
@@ -508,7 +509,7 @@ def get_all_posts():
         activity_type="view_all_posts",
         target_id=None,  
         target_type="Post",
-        data={"post_count": len(posts_list)}
+        data={"post_count": len(posts_list)}  
     )
 
     return jsonify({
@@ -873,7 +874,6 @@ def add_post():
 
 
 
-
 @app.route("/<int:Pid>/comments", methods=['GET', 'POST'])
 @login_required
 def comments(Pid):
@@ -957,6 +957,13 @@ def comments(Pid):
         'message': 'Invalid request method',
         'data': None
     }), 405
+
+
+
+
+
+
+
 
 
 
