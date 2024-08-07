@@ -1115,7 +1115,7 @@ def delete_comment(cid):
             'message': 'Post not found or is deleted',
             'data': None
         }), 404
-    if post.user.username == current_user.username or comment.commented_by == current_user.username:
+    if post.user.username == current_user.username or comment.User_id == current_user.id:
         # Log the deletion activity
         log_activity(
             user_id=current_user.id,
