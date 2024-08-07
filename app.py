@@ -1038,71 +1038,64 @@ def comments(Pid):
 
 
 #DELETE
-@app.route("/delete_user", methods=['GET', 'POST'])
+@app.route("/delete_user", methods=['POST'])
 @jwt_required()
 def delete_user():
-    if request.method == 'POST':
-        current_user_id = get_jwt_identity()
-        current_user = User.query.get(current_user_id)
-        if not current_user.is_authenticated:
-            return jsonify({
-                'status': 'error',
-                'message': 'You must be logged in to access this page',
-                'data': None
-            }), 401
-        
-        user = current_user
-        password = request.form.get('password', '')
-        
-        if not check_password_hash(user.password, password):
-            return jsonify({
-                'status': 'error',
-                'message': 'Incorrect password',
-                'data': None
-            }), 403
-        
-        user.is_deleted = True
-        
-        posts = Post.query.filter_by(user_id=user.id, is_deleted=False).all()
-        for post in posts:
-            post.is_deleted = True
-            comments = Comments.query.filter_by(Post_id=post.id, is_deleted=False).all()
-            for comment in comments:
-                comment.is_deleted = True
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
 
-        try:
-            db.session.commit()
-            log_activity(
-                user_id=user.id,
-                activity_type='User-deletion',
-                data={
-                    'deleted_user_id': user.id,
-                    'deleted_user_username': user.username
-                },
-                target_id=user.id,
-                target_type='User'
-            )
-            logging.info(f'User {user.username} has been soft deleted and logged out successfully.')
-            logout_user()
-            return jsonify({
-                'status': 'success',
-                'message': 'User deleted successfully',
-                'data': None
-            }), 200
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f'Error deleting user: {e}')
-            return jsonify({
-                'status': 'error',
-                'message': f'Error: {e}',
-                'data': None
-            }), 500
+    if not current_user:
+        return jsonify({
+            'status': 'error',
+            'message': 'User not found',
+            'data': None
+        }), 404
 
-    return jsonify({
-        'status': 'error',
-        'message': 'Invalid request method',
-        'data': None
-    }), 405
+    password = request.form.get('password', '')
+    
+    if not check_password_hash(current_user.password, password):
+        return jsonify({
+            'status': 'error',
+            'message': 'Incorrect password',
+            'data': None
+        }), 403
+    
+    current_user.is_deleted = True
+
+    posts = Post.query.filter_by(user_id=current_user.id, is_deleted=False).all()
+    for post in posts:
+        post.is_deleted = True
+        comments = Comments.query.filter_by(post_id=post.id, is_deleted=False).all()
+        for comment in comments:
+            comment.is_deleted = True
+
+    try:
+        db.session.commit()
+        log_activity(
+            user_id=current_user.id,
+            activity_type='User-deletion',
+            data={
+                'deleted_user_id': current_user.id,
+                'deleted_user_username': current_user.username
+            },
+            target_id=current_user.id,
+            target_type='User'
+        )
+        logging.info(f'User {current_user.username} has been soft deleted and logged out successfully.')
+        logout_user()
+        return jsonify({
+            'status': 'success',
+            'message': 'User deleted successfully',
+            'data': None
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f'Error deleting user: {e}')
+        return jsonify({
+            'status': 'error',
+            'message': f'Error: {str(e)}',
+            'data': None
+        }), 500
 
 
 
