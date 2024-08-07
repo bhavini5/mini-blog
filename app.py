@@ -20,6 +20,9 @@ from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
 from dotenv import load_dotenv
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager
+from flask_jwt_extended import jwt_required, create_access_token, get_jwt_identity
+
 
 load_dotenv()
 
@@ -37,6 +40,45 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.secret_key = os.getenv('SECRET_KEY') 
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
 
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_KEY')  
+jwt = JWTManager(app)
+
+@jwt.expired_token_loader
+def expired_token_callback(expired_token):
+    return jsonify({
+        'status': 'error',
+        'message': 'The token has expired',
+        'data': None
+    }), 401
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=1) 
+app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
+
+
+@jwt.expired_token_loader
+def expired_token_callback(expired_token):
+    return jsonify({
+        'status': 'error',
+        'message': 'The token has expired',
+        'data': None
+    }), 401
+
+# @jwt.invalid_token_loader
+# def invalid_token_callback(error):
+#     return jsonify({
+#         'status': 'error',
+#         'message': 'Invalid token',
+#         'data': None
+#     }), 401
+
+# @jwt.unauthorized_loader
+# def missing_token_callback(error):
+#     return jsonify({
+#         'status': 'error',
+#         'message': 'Token is missing',
+#         'data': None
+#     }), 401
+
+
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
@@ -53,11 +95,6 @@ PARENT_FOLDER_ID = parent_folder_id
 
 # CSRF Protection (if used)
 # csrf = CSRFProtect(app)
-
-
-
-
-
 
 
 def authenticate():
@@ -255,13 +292,16 @@ def log_activity(user_id, activity_type, target_id=None, target_type=None, data=
     db.session.commit()
 
 @app.route('/activity_log')
-# @login_required
+# @jwt_required()
 def activity_log():
     activities = ActivityLog.query.order_by(ActivityLog.timestamp.desc()).all()
     return jsonify([activity.to_dict() for activity in activities])
 
 
-@app.route('/login',methods=['POST'])
+
+from flask_jwt_extended import create_access_token, create_refresh_token
+
+@app.route('/login', methods=['POST'])
 def login():
     username = request.form.get('username')
     password = request.form.get('password')
@@ -284,35 +324,43 @@ def login():
     logging.info(f'Login attempt for user: {username}')
     
     user = User.query.filter_by(username=username).first()
-    if user.is_deleted:
+    if user is None or user.is_deleted:
         return jsonify({
             "status": "error",
-            "message": "User is Deleted",
+            "message": "User does not exist or has been deleted.",
             "data": None
         }), 403
 
-    if user and user.check_password_hash(password):
+    if user.check_password_hash(password):
+        access_token = create_access_token(identity=user.id)
+        refresh_token = create_refresh_token(identity=user.id)
+        
         log_activity(
             user_id=user.id,
             activity_type='login',
             data=user.username
         )
-        session['user_id'] = user.id
-        login_user(user)
-        next_page = request.args.get('next')
-        session.permanent = True
+        
         logging.info(f'User {username} logged in successfully.')
         
+        return jsonify({
+            "status": "success",
+            "message": "Logged in successfully.",
+            "data": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "access_token": access_token,
+                "refresh_token": refresh_token
+            }
+        }), 200
+
     return jsonify({
-        "status": "success",
-        "message": "Logged in successfully.",
-        "data": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email
-        }
-    }), 200
-    
+        "status": "error",
+        "message": "Invalid credentials.",
+        "data": None
+    }), 401
+
     # logging.warning(f'Invalid login attempt for user: {username}')
     # return jsonify({
     #     "status": "error",
@@ -322,8 +370,10 @@ def login():
 
 
 @app.route('/change_password', methods=['POST'])
-@login_required
+@jwt_required()
 def change_password():
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
     current_password = request.form.get('current_password')
     new_password = request.form.get('new_password')
     
@@ -380,7 +430,7 @@ def change_password():
 
 
 @app.route("/logout")
-@login_required
+@jwt_required()
 def logout():
     try:
         user_info = {
@@ -419,8 +469,10 @@ def logout():
 
 # all user
 @app.route("/display-all")
-@login_required
+@jwt_required()
 def display_all():
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
     logging.info(f"User {current_user.username} accessed /display-all")
 
     log_activity(
@@ -450,9 +502,10 @@ def display_all():
 
 # show comments on post
 @app.route("/post/<int:post_id>/comments")
-@login_required
+@jwt_required()
 def post_comments(post_id):
-
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
     post = Post.query.get(post_id)
 
     if post:
@@ -499,8 +552,10 @@ def post_comments(post_id):
 
 #all posts
 @app.route("/posts")
-@login_required
+@jwt_required()
 def get_all_posts():
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
     posts = Post.query.filter_by(is_deleted=False).order_by(Post.date_of_creation.desc()).all()
 
     posts_list = [
@@ -534,8 +589,10 @@ def get_all_posts():
 
 # specific user post
 @app.route("/user/<int:user_id>/posts")
-@login_required
+@jwt_required()
 def get_user_posts(user_id):
+    # current_user_id = get_jwt_identity()
+    # current_user = User.query.get(current_user_id)
     user = User.query.get(user_id)
 
     if not user:
@@ -585,7 +642,7 @@ def get_user_posts(user_id):
 
 
 @app.route("/show", methods=['GET'])
-@login_required
+@jwt_required()
 def show():
     page = request.args.get('page', 1, type=int)
     per_page = 1  
@@ -747,8 +804,10 @@ from werkzeug.utils import secure_filename
 from moviepy.editor import VideoFileClip
 
 @app.route("/add_post", methods=['POST'])
-@login_required
+@jwt_required()
 def add_post():
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
     if not current_user:
         return jsonify({
             'status': 'error',
@@ -890,8 +949,10 @@ def add_post():
 
 
 @app.route("/<int:Pid>/comments", methods=['GET', 'POST'])
-@login_required
+@jwt_required()
 def comments(Pid):
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
     if request.method == 'POST':
         post = Post.query.get(Pid)
 
@@ -977,9 +1038,11 @@ def comments(Pid):
 
 #DELETE
 @app.route("/delete_user", methods=['GET', 'POST'])
-@login_required
+@jwt_required()
 def delete_user():
     if request.method == 'POST':
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
         if not current_user.is_authenticated:
             return jsonify({
                 'status': 'error',
@@ -1045,8 +1108,10 @@ def delete_user():
 
 
 @app.route("/<int:Pid>/delete_post")
-@login_required
+@jwt_required()
 def delete_post(Pid):
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
         post = Post.query.filter_by(id=Pid).first()
         if not post:
             return jsonify({
@@ -1098,8 +1163,10 @@ def delete_post(Pid):
 
 
 @app.route("/<int:cid>/delete_comment")
-@login_required
+@jwt_required()
 def delete_comment(cid):
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
     comment = Comments.query.filter_by(id=cid, is_deleted=False).first()
     if not comment:
         return jsonify({
@@ -1157,8 +1224,10 @@ local_tz = pytz.timezone('Asia/Kolkata')
 
 #UPDATE
 @app.route("/update_profile", methods=['GET', 'POST'])
-@login_required
+@jwt_required()
 def update_profile():
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
     user = current_user
 
     if not user.is_authenticated:
@@ -1289,8 +1358,10 @@ def update_profile():
 
 
 @app.route("/<int:Pid>/update_post", methods=['POST'])
-@login_required
+@jwt_required()
 def update_post(Pid):
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
     post = Post.query.filter_by(id=Pid).first()
     
     if not post:
