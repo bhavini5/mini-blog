@@ -762,7 +762,7 @@ def create_user():
         'email': temp_user.email,
         'user_id': temp_user.id
     }
-
+    access_token = create_access_token(identity=temp_user.id)
     log_activity(
         user_id=temp_user.id,
         activity_type='Signup',
@@ -779,7 +779,8 @@ def create_user():
         'username': username,
         'email': email,
         'phone_number': phone_number,
-        'profile_image': temp_user.profile_image
+        'profile_image': temp_user.profile_image,
+        'access_token': access_token
     }
 
     return jsonify({
@@ -1119,7 +1120,6 @@ def delete_post(Pid):
                 'message': 'Invalid Post',
                 'data': None
             }), 404
-
         if post.user.username == current_user.username:
             post.is_deleted = True
             
