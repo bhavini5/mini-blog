@@ -696,6 +696,9 @@ def create_user():
             'data': None
         }), 500
 
+    # Log in the user using Flask-Login
+    login_user(temp_user)
+
     user_info = {
         'first_name': temp_user.first_name,
         'username': temp_user.username,
@@ -711,7 +714,7 @@ def create_user():
         }
     )
 
-    logging.info(f'{temp_user.username} has been successfully created.')
+    logging.info(f'{temp_user.username} has been successfully created and logged in.')
 
     response_data = {
         'first_name': request.form.get('first_name'),
@@ -724,7 +727,7 @@ def create_user():
 
     return jsonify({
         'status': 'success',
-        'message': 'User created successfully',
+        'message': 'User created and logged in successfully',
         'data': response_data
     }), 200
 
@@ -907,7 +910,7 @@ def comments(Pid):
         }), 403
 
     if request.method == 'POST':
-        comment = request.form.get('Comments')
+        comment = request.form.get('comments')
         # print(post.user.id)
         # print(current_user.id)
         # if current_user.id == post.user.id:
