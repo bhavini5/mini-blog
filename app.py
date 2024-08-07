@@ -955,15 +955,14 @@ def add_post():
 def comments(Pid):
     current_user_id = get_jwt_identity()
     current_user = User.query.get(current_user_id)
-    if request.method == 'POST':
-        post = Post.query.get(Pid)
 
-    # if not post:
-    #     return jsonify({
-    #         'status': 'error',
-    #         'message': 'Invalid post ID',
-    #         'data': None
-    #     }), 404
+    post = Post.query.get(Pid)
+    if not post:
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid post ID',
+            'data': None
+        }), 404
 
     if post.is_deleted:
         return jsonify({
@@ -974,15 +973,14 @@ def comments(Pid):
 
     if request.method == 'POST':
         comment = request.form.get('comments')
-        # print(post.user.id)
-        # print(current_user.id)
-        # if current_user.id == post.user.id:
-        #     return jsonify({
-        #         'status': 'error',
-        #         'message': 'You cannot comment on your own post',
-        #         'data': None
-        #     }), 403
         
+        if not comment:
+            return jsonify({
+                'status': 'error',
+                'message': 'Comment cannot be empty',
+                'data': None
+            }), 400
+
         if len(comment) < 5:
             return jsonify({
                 'status': 'error',
@@ -1027,7 +1025,7 @@ def comments(Pid):
         return jsonify({
             'status': 'success',
             'message': 'Comment added successfully',
-            'data': new_comment
+            'data': response_data
         }), 201
 
     return jsonify({
