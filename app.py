@@ -924,6 +924,7 @@ def add_post():
             'status': 'success',
             'message': 'Post created successfully',
             'data': {
+                "post_id":new_post.id,
                 'images': images,
                 'content': content,
                 'content_length': content_length,
@@ -1026,7 +1027,7 @@ def comments(Pid):
         return jsonify({
             'status': 'success',
             'message': 'Comment added successfully',
-            'data': response_data
+            'data': new_comment
         }), 201
 
     return jsonify({
