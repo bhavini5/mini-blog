@@ -691,7 +691,7 @@ def create_user():
         }), 400
 
     username = request.form.get('username')
-    if User.query.filter_by(email=email).first():
+    if User.query.filter_by(email=email).filter_by(is_deleted=False).first():
         return jsonify({
             'status': 'error',
             'message': 'Email already exists',
