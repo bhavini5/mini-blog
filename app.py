@@ -958,12 +958,12 @@ def comments(Pid):
     if request.method == 'POST':
         post = Post.query.get(Pid)
 
-    if not post:
-        return jsonify({
-            'status': 'error',
-            'message': 'Invalid post ID',
-            'data': None
-        }), 404
+    # if not post:
+    #     return jsonify({
+    #         'status': 'error',
+    #         'message': 'Invalid post ID',
+    #         'data': None
+    #     }), 404
 
     if post.is_deleted:
         return jsonify({
