@@ -530,7 +530,7 @@ def post_comments(post_id):
             "comment": comment.Comments,
             "date_of_creation" : (
                 post.date_of_creation.astimezone(pytz.timezone('Asia/Kolkata'))
-                .strftime("%d %b %Y,%H:%M") if post.date_of_creation else None
+                .strftime("%d %m %Y:%H:%M") if post.date_of_creation else None
                 ),
 
             "post_id": comment.Post_id,
@@ -572,7 +572,7 @@ def get_all_posts():
             "username":post.user.username,
             "date_of_creation" : (
                 post.date_of_creation.astimezone(pytz.timezone('Asia/Kolkata'))
-                .strftime("%d %m %Y,%H:%M") if post.date_of_creation else None
+                .strftime("%d %m %Y:%H:%M") if post.date_of_creation else None
 )
 
         }
