@@ -528,7 +528,11 @@ def post_comments(post_id):
         {
             "id": comment.id,
             "comment": comment.Comments,
-            "date": comment.date.strftime("%Y-%m-%d %H:%M:%S"),
+            "date_of_creation" : (
+                post.date_of_creation.astimezone(pytz.timezone('Asia/Kolkata'))
+                .strftime("%d %b %Y\n%H:%M") if post.date_of_creation else None
+                ),
+
             "post_id": comment.Post_id,
         }
         for comment in comments
