@@ -1,1 +1,1 @@
-SQLALCHEMY_DATABASE_URI
+"%d %m %Y %H:%M:%S")
