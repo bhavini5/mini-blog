@@ -566,7 +566,11 @@ def get_all_posts():
             "videos": post.videos,
             "user_id": post.user_id,  
             "username":post.user.username,
-            "date_of_creation": post.date_of_creation.astimezone(pytz.timezone('Asia/Kolkata')).strftime("%Y-%m-%d %H:%M:%S") if post.date_of_creation else None,
+            "date_of_creation" : (
+                post.date_of_creation.astimezone(pytz.timezone('Asia/Kolkata'))
+                .strftime("%d %b %Y\n%H:%M:%S") if post.date_of_creation else None
+)
+
         }
         for post in posts
     ]
