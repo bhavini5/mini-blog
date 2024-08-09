@@ -931,7 +931,7 @@ def add_post():
 
         return jsonify({
             'status': 'success',
-            'message': 'Post created successfully',
+            'message': 'New post has been created successfully',
             'data': {
                 "post_id":new_post.id,
                 'images': images,
